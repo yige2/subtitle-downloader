@@ -6,12 +6,13 @@ SubtitleService 是项目的核心调度器，负责：
     - 调用 matcher 选择最佳匹配
     - 下载匹配的字幕文件
     - 记录成功/失败日志
-    - 输出统计信息
+    - 输出统计信息和进度条
 
 不包含任何 Playwright 代码，仅通过抽象接口操作。
 """
 
 import logging
+import sys
 import time
 
 from src.config import Config
@@ -21,6 +22,38 @@ from src.utils.matcher import choose_best
 from src.utils.parser import parse_movie_title
 
 logger = logging.getLogger(__name__)
+
+# 进度条宽度（字符数）
+_BAR_WIDTH = 30
+
+
+def _render_progress(
+    current: int,
+    total: int,
+    title: str,
+    success: int,
+    failed: int,
+) -> str:
+    """渲染进度条字符串。
+
+    Args:
+        current: 当前处理序号 (1-based)。
+        total: 总电影数。
+        title: 当前电影名称。
+        success: 已成功数量。
+        failed: 已失败数量。
+
+    Returns:
+        格式化的进度条字符串（含 \\r 前缀用于原地刷新）。
+    """
+    pct = current / total if total > 0 else 0
+    filled = int(_BAR_WIDTH * pct)
+    bar = "█" * filled + "░" * (_BAR_WIDTH - filled)
+    return (
+        f"\r  [{bar}] {current}/{total} ({pct:.0%})"
+        f"  ✓{success} ✗{failed}"
+        f"  {title[:20]:<20}"
+    )
 
 
 class SubtitleService:
@@ -133,13 +166,21 @@ class SubtitleService:
             logger.warning("电影列表为空，没有需要处理的任务。")
             return
 
+        total = len(raw_movies)
         success_count: int = 0
         failed_count: int = 0
+        index: int = 0
 
         for line in raw_movies:
             title, year = parse_movie_title(line)
             if not title:
                 continue
+
+            index += 1
+            sys.stderr.write(
+                _render_progress(index, total, title, success_count, failed_count)
+            )
+            sys.stderr.flush()
 
             logger.info("=" * 36)
             logger.info("Searching : %s", title)
@@ -204,6 +245,10 @@ class SubtitleService:
                 logger.info("Failed")
                 self.record_failed(title)
                 failed_count += 1
+
+        # 进度条结束，换行
+        sys.stderr.write("\n")
+        sys.stderr.flush()
 
         # ---- 统计 ----
         elapsed = time.time() - start_time
