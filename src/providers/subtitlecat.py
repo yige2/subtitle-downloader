@@ -81,26 +81,28 @@ class SubtitleCatProvider(BaseProvider):
             f"{self.base_url}/index.php?search={quote_plus(movie_title)}"
         )
 
-        try:
-            page = self.browser.open(search_url)
-            try:
-                html = page.content()
-                results = parse_search_results(html)
-                logger.info("Found: %d results", len(results))
-
-                best = choose_best(results, movie_title, year)
-                logger.info("Best Match:")
-                if best:
-                    logger.info(best["title"])
-                else:
-                    logger.info("(none)")
-
-                return results
-            finally:
-                page.close()
-        except Exception:
-            logger.warning("搜索过程中发生异常", exc_info=True)
+        page = self.browser.open(search_url)
+        if page is None:
             return []
+
+        try:
+            html = page.content()
+            results = parse_search_results(html)
+            logger.info("Found: %d results", len(results))
+
+            best = choose_best(results, movie_title, year)
+            logger.info("Best Match:")
+            if best:
+                logger.info(best["title"])
+            else:
+                logger.info("(none)")
+
+            return results
+        except Exception:
+            logger.warning("搜索解析异常", exc_info=True)
+            return []
+        finally:
+            page.close()
 
     # ------------------------------------------------------------------
     # get_download_url
@@ -126,22 +128,24 @@ class SubtitleCatProvider(BaseProvider):
         if not full_url.startswith("http"):
             full_url = f"{self.base_url}/{subtitle_url.lstrip('/')}"
 
-        try:
-            page = self.browser.open(full_url)
-            try:
-                html = page.content()
-                download_href = parse_download_url(html, language=self.language)
-
-                if download_href:
-                    if not download_href.startswith("http"):
-                        download_href = f"{self.base_url}{download_href}"
-                    logger.info("Found %s", self.language)
-                    return download_href
-                else:
-                    logger.info("No %s subtitle", self.language)
-                    return None
-            finally:
-                page.close()
-        except Exception:
-            logger.warning("获取下载链接过程中发生异常", exc_info=True)
+        page = self.browser.open(full_url)
+        if page is None:
             return None
+
+        try:
+            html = page.content()
+            download_href = parse_download_url(html, language=self.language)
+
+            if download_href:
+                if not download_href.startswith("http"):
+                    download_href = f"{self.base_url}{download_href}"
+                logger.info("Found %s", self.language)
+                return download_href
+            else:
+                logger.info("No %s subtitle", self.language)
+                return None
+        except Exception:
+            logger.warning("下载链接解析异常", exc_info=True)
+            return None
+        finally:
+            page.close()

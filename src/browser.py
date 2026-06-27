@@ -142,7 +142,7 @@ class BrowserManager:
         self,
         url: str,
         wait_until: str = "domcontentloaded",
-    ) -> Page:
+    ) -> Optional[Page]:
         """创建一个新页面并导航到指定 URL。
 
         这是 new_page() + page.goto() 的便捷组合方法。
@@ -154,20 +154,17 @@ class BrowserManager:
                 以避免在资源较多的页面上等待过长时间。
 
         Returns:
-            已导航到目标 URL 的 Page 对象。
-
-        Raises:
-            RuntimeError: 如果导航失败或浏览器状态异常。
+            已导航到目标 URL 的 Page 对象；导航失败返回 None（不抛异常）。
         """
         logger.info("正在打开页面: %s", url)
         page = self.new_page()
         try:
             page.goto(url, wait_until=wait_until)
             logger.info("页面加载完成: %s", url)
-        except Exception as exc:
-            logger.exception("页面导航失败: %s", url)
+        except Exception:
+            logger.warning("页面导航失败: %s", url)
             page.close()
-            raise RuntimeError(f"无法导航到 {url}") from exc
+            return None
         return page
 
 
